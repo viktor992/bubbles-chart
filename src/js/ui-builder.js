@@ -51,6 +51,7 @@ UiBuilder.prototype.bindMouseEvents = function (node) {
  * Create the visualization and timeline container
  */
 UiBuilder.prototype.prepareContainer = function () {
+
     this.diameter = $(this.config.container).height();
     this.width = $(this.config.container).width() - this.config.padding;
     // si el contenedor es muy pequeño se utilizan los valores por defecto
@@ -173,14 +174,18 @@ UiBuilder.prototype.createTooltip = function (el, d) {
     var svgP = $("#" + this.vizId).position();
     var $el = d3.select(el);
     var bbox = $el.node().getBBox();
+
     var elT = d3.transform($el.attr("transform")).translate;
     //se calcula el tamaño del tooltip
     var maxWidth = 300;
+
     var maxHeigth = 15 + 35 * data.length;
+
     //20 px correspondientes a la fecha del tooltip
     var toffset = 20;
     var x = elP.left + bbox.width / 2 - maxWidth / 2;
     var y = elP.top - maxHeigth - toffset;
+
     x = x < 0 ? 0 : x;
     y = x < 0 ? 0 : y;
 
@@ -190,7 +195,7 @@ UiBuilder.prototype.createTooltip = function (el, d) {
         "y": y,
         "allColors": true,
         "fixed": true,
-        "size": "small",
+        "size": "large",
         "color": thiz.config.color(d[thiz.config.colour]),
         "fontfamily": "Helvetica Neue",
         "fontweight": 200,
@@ -205,6 +210,11 @@ UiBuilder.prototype.createTooltip = function (el, d) {
         "title": thiz.config.format.text(thiz.config.title(d)),
     }
     d3plus.tooltip.create(config);
+
+    $("#d3plus_tooltip_id_bubbles_visualization_focus .d3plus_tooltip_container").height(maxHeigth);
+    $("#d3plus_tooltip_id_bubbles_visualization_focus .d3plus_tooltip_container").css("overflow-y","visible");
+    $("#d3plus_tooltip_id_bubbles_visualization_focus .d3plus_tooltip_data_container").css("overflow-y","visible");
+    
 }
 
 /**
