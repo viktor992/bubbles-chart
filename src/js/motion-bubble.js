@@ -461,7 +461,7 @@ MotionBubble.prototype.legend = function () {
 
     var container = d3.select("#" + this.legendId)
         .style("margin-top", (-(rmax * 3 + 100)) + "px")
-        .attr("class", "legend-container");
+        .attr("class", "legend-container hidden-sm hidden-xs");
 
     var overview = container.append("div").attr("class", "legend-overview");
     if(this.config.legend.title){
@@ -513,7 +513,8 @@ MotionBubble.prototype.legendRight = function () {
         .style("position", "absolute")
         .style("right", "0px")
         .style("width", "250px")
-        .attr("class", "legend-container");
+        .attr("class", "legend-container hidden-sm hidden-xs");
+
 
     var svg = container.append("svg");
     svg.style("height","500px");
