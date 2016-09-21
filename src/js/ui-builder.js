@@ -12,6 +12,21 @@ UiBuilder.prototype.initialize = function () {
     this.prepareContainer();
 }
 
+/**
+ * Se encarga de redimencionar el contenedor de la visualización
+ */
+UiBuilder.prototype.resizeViz = function (height) {
+    var $viz = $("#" + this.vizId);
+    var $svg = $viz.find("svg");
+    $viz.animate({
+        "height": height
+    }, 50);
+    $svg.animate({
+        "height": height
+    }, 50);
+    //$svg.height(height);
+}
+
 UiBuilder.prototype.bindMouseEvents = function (node) {
     var thiz = this;
     node.on('click', function (d) {
@@ -33,9 +48,10 @@ UiBuilder.prototype.bindMouseEvents = function (node) {
 }
 
 /**
- * Create the visualization and timeline container 
+ * Create the visualization and timeline container
  */
 UiBuilder.prototype.prepareContainer = function () {
+
     this.diameter = $(this.config.container).height();
     this.width = $(this.config.container).width() - this.config.padding;
     // si el contenedor es muy pequeño se utilizan los valores por defecto
@@ -44,6 +60,8 @@ UiBuilder.prototype.prepareContainer = function () {
 
     this.config.scope = this.config.container.replace("#", "");
     this.vizId = this.config.scope + "-viz";
+    this.legendId = this.config.scope + "-legend";
+    this.legendRightId = this.config.scope + "-legend-right";
     this.footerId = this.config.scope + "-footer";
     this.headerId = this.config.scope + "-header";
 
@@ -53,6 +71,12 @@ UiBuilder.prototype.prepareContainer = function () {
     var $viz = $("<div />");
     $viz.attr("id", this.vizId);
 
+    var $legend = $("<div />");
+    $legend.attr("id", this.legendId);
+
+    var $legendRight = $("<div />");
+    $legendRight.attr("id", this.legendRightId);
+
     var $footer = $("<div />");
     $footer.attr("id", this.footerId);
 
@@ -61,6 +85,8 @@ UiBuilder.prototype.prepareContainer = function () {
 
     $(this.config.container).append($header);
     $(this.config.container).append($viz);
+    $(this.config.container).append($legend);
+    $(this.config.container).append($legendRight);
     $(this.config.container).append($footer);
 
     $viz.height(this.diameter);
@@ -84,7 +110,7 @@ UiBuilder.prototype.text = function (node, options) {
     return node.append(type)
         .attr("class", "wrap")
         .style("fill", function (d) {
-            var c = thiz.config.color(d[thiz.config.label]);
+            var c = thiz.config.color(d[thiz.config.colour]);
             c = d3plus.color.text(c);
             if (isLikeWhite(c)) {
                 return thiz.config.defaultColor;
@@ -117,7 +143,7 @@ UiBuilder.prototype.circle = function (node, options) {
             if (typeof options.fill != "undefined") {
                 return options.fill;
             }
-            return thiz.config.color(d[thiz.config.label]);
+            return thiz.config.color(d[thiz.config.colour]);
         });
 }
 
@@ -153,14 +179,18 @@ UiBuilder.prototype.createTooltip = function (el, d) {
     var svgP = $("#" + this.vizId).position();
     var $el = d3.select(el);
     var bbox = $el.node().getBBox();
+
     var elT = d3.transform($el.attr("transform")).translate;
     //se calcula el tamaño del tooltip
     var maxWidth = 300;
+
     var maxHeigth = 15 + 35 * data.length;
+
     //20 px correspondientes a la fecha del tooltip
     var toffset = 20;
     var x = elP.left + bbox.width / 2 - maxWidth / 2;
     var y = elP.top - maxHeigth - toffset;
+
     x = x < 0 ? 0 : x;
     y = x < 0 ? 0 : y;
 
@@ -170,8 +200,8 @@ UiBuilder.prototype.createTooltip = function (el, d) {
         "y": y,
         "allColors": true,
         "fixed": true,
-        "size": "small",
-        "color": thiz.config.color(d[thiz.config.label]),
+        "size": "large",
+        "color": thiz.config.color(d[thiz.config.colour]),
         "fontfamily": "Helvetica Neue",
         "fontweight": 200,
         "fontsize": "15px",
@@ -182,9 +212,14 @@ UiBuilder.prototype.createTooltip = function (el, d) {
         "arrow": true,
         "align": "bottom center",
         "anchor": "top left",
-        "title": thiz.config.format.text(d[thiz.config.label]),
+        "title": thiz.config.format.text(thiz.config.title(d)),
     }
     d3plus.tooltip.create(config);
+
+    $("#d3plus_tooltip_id_bubbles_visualization_focus .d3plus_tooltip_container").height(maxHeigth);
+    $("#d3plus_tooltip_id_bubbles_visualization_focus .d3plus_tooltip_container").css("overflow-y","visible");
+    $("#d3plus_tooltip_id_bubbles_visualization_focus .d3plus_tooltip_data_container").css("overflow-y","visible");
+    
 }
 
 /**
@@ -258,7 +293,7 @@ UiBuilder.prototype.drillup = function () {
  */
 UiBuilder.prototype.updateBreadcrumbs = function (d) {
     //var $target = this.getEl(data);
-    var fill = this.config.color(d[this.config.label]);
+    var fill = this.config.color(d[this.config.colour]);
     var textColor = d3plus.color.text(fill);
     var $brumbs = $(this.config.container).find(".bubble-hierarchies");
     var $a = $brumbs.find("[data-level='" + this.config.level + "']");
@@ -337,9 +372,8 @@ UiBuilder.prototype.timeline = function () {
         .text(function (d) {
             return d.time;
         });
-
-    this.selectable(ul, li, function (e) {
-        var selections = []
+    d3.selectable(ul, li, function (e) {
+        var selections = [];
         ul.selectAll('li')
             .classed('selected', function (d) {
                 if (d._selected) {
@@ -354,146 +388,5 @@ UiBuilder.prototype.timeline = function () {
         });
         thiz.onChange();
         thiz.trigger("timechange", thiz.timeSelection);
-    });
-}
-
-/**
- * D3 Selectable
- *
- * Bind selection functionality to `ul`, an ancestor node selection
- * with its corresponding child selection 'li'.
- * Selection state update rendering takes place in the `update` callback.
- *
- */
-UiBuilder.prototype.selectable = function (ul, li, update) {
-    function isParentNode(parentNode, node) {
-        if (!node) return false;
-        if (node === parentNode) return true;
-        return isParentNode(parentNode, node.parentNode);
-    }
-
-    function selectFirst(selection) {
-        selection.each(function (d, i) {
-            if (i === 0) d._selected = true;
-        });
-    }
-
-    function selectLast(selection) {
-        selection.each(function (d, i, j) {
-            if (i === selection[j].length - 1) d._selected = true;
-        });
-    }
-
-    var lastDecision;
-
-    function select(d, node) {
-        var parentNode = ul.filter(function () {
-                return isParentNode(this, node);
-            }).node(),
-            lis = li.filter(function () {
-                return isParentNode(parentNode, this);
-            });
-        // select ranges via `shift` key
-        if (d3.event.shiftKey) {
-            var firstSelectedIndex, lastSelectedIndex, currentIndex;
-            lis.each(function (dl, i) {
-                if (dl._selected) {
-                    firstSelectedIndex || (firstSelectedIndex = i);
-                    lastSelectedIndex = i;
-                }
-                if (this === node) currentIndex = i;
-            });
-            var min = Math.min(firstSelectedIndex, lastSelectedIndex, currentIndex);
-            var max = Math.max(firstSelectedIndex, lastSelectedIndex, currentIndex);
-
-            // select all between first and last selected
-            // when clicked inside a selection
-            lis.each(function (d, i) {
-                // preserve state for additive selection
-                d._selected = (d3.event.ctrlKey && d._selected) || (i >= min && i <= max);
-            });
-        } else {
-            // additive select with `ctrl` key
-            if (!d3.event.ctrlKey) {
-                lis.each(function (d) {
-                    d._selected = false;
-                });
-            }
-            d._selected = !d._selected;
-        }
-        // remember decision
-        lastDecision = d._selected;
-        update();
-    }
-
-    ul.selectAll("li")
-        .on('mousedown', function (d) {
-            select(d, this);
-        }).on('mouseover', function (d) {
-            // dragging over items toggles selection
-            if (d3.event.which) {
-                d._selected = lastDecision;
-                update();
-            }
-        });
-
-
-    var keyCodes = {
-        up: 38,
-        down: 40,
-        home: 36,
-        end: 35,
-        a: 65
-    };
-
-    ul.on('keydown', function () {
-        if (d3.values(keyCodes).indexOf(d3.event.keyCode) === -1) return;
-        if (d3.event.keyCode === keyCodes.a && !d3.event.ctrlKey) return;
-
-        var focus = ul.filter(':focus').node();
-        if (!focus) return;
-
-        d3.event.preventDefault();
-
-        var scope = li.filter(function (d) {
-            return isParentNode(focus, this);
-        });
-        var selecteds = scope.select(function (d) {
-            return d._selected;
-        });
-
-        if (!d3.event.ctrlKey) {
-            scope.each(function (d) {
-                d._selected = false;
-            });
-        }
-
-        var madeSelection = false;
-        switch (d3.event.keyCode) {
-            case keyCodes.up:
-                selecteds.each(function (d, i, j) {
-                    if (scope[j][i - 1]) madeSelection = d3.select(scope[j][i - 1]).data()[0]._selected = true;
-                });
-                if (!madeSelection) selectLast(scope);
-                break;
-            case keyCodes.down:
-                selecteds.each(function (d, i, j) {
-                    if (scope[j][i + 1]) madeSelection = d3.select(scope[j][i + 1]).data()[0]._selected = true;
-                });
-                if (!madeSelection) selectFirst(scope);
-                break;
-            case keyCodes.home:
-                selectFirst(scope);
-                break;
-            case keyCodes.end:
-                selectLast(scope);
-                break;
-            case keyCodes.a:
-                scope.each(function (d) {
-                    d._selected = !d3.event.shiftKey;
-                });
-                break;
-        }
-        update();
     });
 }

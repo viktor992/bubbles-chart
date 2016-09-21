@@ -218,9 +218,14 @@ MotionBubble.prototype.buildNodes = function (data, filter) {
         .domain([min, max])
         .range([this.config.bubble.minRadius, maxR]);
 
+    thiz.clusters = _.uniq(_.pluck(darray, thiz.config.colour));        
+    thiz.deltaY = Math.floor(thiz.diameter / thiz.clusters.length);
+
     darray.forEach(function (d) {
-        d.x = Math.random() * thiz.width;
-        d.y = Math.random() * thiz.diameter;
+ 
+        d.clusterX = thiz.center.x;
+        d.clusterY = thiz.deltaY + _.indexOf(thiz.clusters, d[thiz.config.colour]) * thiz.deltaY;
+
         d.value = d[thiz.config.size];
         d.r = thiz.rscale(d.value);
         // se sumarizan los radios de los elementos a filtrar
@@ -263,10 +268,6 @@ MotionBubble.prototype.builder = function (data) {
             return d.y;
         })
         .attr("fill", function (d) {
-            console.log("builder");
-            console.log(d);
-            console.log(d[thiz.config.colour]);
-            console.log(thiz.config.color(d[thiz.config.colour]));
             return thiz.config.color(d[thiz.config.colour]);
         })
         .attr("stroke-width", 1)
@@ -320,12 +321,13 @@ MotionBubble.prototype.tickNodes = function (e, moveCallback) {
 
 MotionBubble.prototype.groupAll = function (nodes, filter) {
     var thiz = this;
-
+    var end = false;
     //momento en el que se realizó esta llamada
     currentTime=  new Date().getTime();
     
     //se almacena en thiz la ultima llamada
     thiz.currentFilterTime = currentTime;
+    thiz.currentFilter = filter;
 
     thiz.hideFilters();
     this.force
@@ -333,12 +335,61 @@ MotionBubble.prototype.groupAll = function (nodes, filter) {
         .charge(this.charge)
         .friction(0.9)
         .on("tick", function (e) {
-            thiz.tickNodes(e, function (alpha) {
-                if (typeof filter != "undefined") {
-                    return thiz.moveTowardsFilter(alpha, filter);
+
+            // if(thiz.currentFilter === filter){
+                thiz.tickNodes(e, function (alpha) {
+                    if (typeof filter !== "undefined") {
+                        if(thiz.config.colour !== filter){
+                            if(alpha < 0.08){
+                                thiz.force.stop();
+                            }
+                        } else {
+                        return thiz.moveTowardsFilter(alpha, filter);
+                        }
+                        // return thiz.moveTowardsCenter(alpha);
+                        return thiz.moveTowardsFilter(alpha, filter);
+                    }
+                    if(alpha < 0.04){
+                        thiz.force.stop();
+                    }
+                    return thiz.moveTowardsCenter(alpha);
+                });
+            // }
+            }).on('end', function() {        
+                // if(thiz.currentFilter === filter){
+                    thiz.force
+                    .on('tick', function(e) {                       
+                        thiz.circles      
+                        .each(function(d) {     
+                        
+                          if(!filter){      
+                            d.x += (thiz.center.x - d.x) * thiz.damper * e.alpha;       
+                            d.y += (thiz.center.y - d.y) * thiz.damper * e.alpha;       
+                        }else{        
+                            
+                            var target = thiz.filterCenters[filter][d[filter]];     
+                            var xpadding = 80;      
+                            d3.select(this).attr("data-filter", d[filter]);     
+                            d.x = d.x + (target.x - d.x) * thiz.damper * e.alpha;       
+                            d.x = d.x <= 0 ? d.r * 2 : d.x;     
+                            d.x = (d.x + d.r) > thiz.width + xpadding ? d.x - d.r : d.x;        
+                            d.y = d.y + (target.y - d.y) * thiz.damper * e.alpha;       
+                        }     
+                    })      
+                    .attr("cx", function (d) {      
+                        return d.x;     
+                    })      
+                    .attr("cy", function (d) {      
+                        return d.y;     
+                    });     
+                });     
+
+                if(!end){
+                    thiz.force.start();
+                    end = true;
                 }
-                return thiz.moveTowardsCenter(alpha);
-            });
+
+        // }
         });
 
     if (typeof filter != "undefined") {
@@ -353,16 +404,19 @@ MotionBubble.prototype.groupAll = function (nodes, filter) {
             if(thiz.currentFilterTime === curtime){
                 thiz.displayFilters(filter);
             }
-        }, this.config.bubble.animation * 0.75, currentTime)
+        }, this.config.bubble.animation, currentTime)
     }
     this.force.start();
 };
 
+
+
 MotionBubble.prototype.moveTowardsCenter = function (alpha) {
     var thiz = this;
     return function (d) {
-        d.x = d.x + (thiz.center.x - d.x) * (thiz.damper) * alpha;
-        return d.y = d.y + (thiz.center.y - d.y) * (thiz.damper) * alpha;
+        d.x += (d.clusterX - d.x) * alpha * thiz.damper;
+        d.y += (d.clusterY - d.y) * alpha * thiz.damper;
+        return d.y;
     };
 };
 
@@ -372,12 +426,21 @@ MotionBubble.prototype.moveTowardsFilter = function (alpha, filter) {
     return function (d) {
         var target = thiz.filterCenters[filter][d[filter]];
         d3.select(this).attr("data-filter", d[filter]);
+        if(filter !== thiz.config.colour){      
+        var deltaY = Math.round(( target.r) / thiz.clusters.length);        
+        var targetY = deltaY + _.indexOf(thiz.clusters, d[thiz.config.colour]) * deltaY + target.y;     
+        d.x = d.x + (target.x - d.x) * thiz.damper * alpha;     
+        d.x = d.x <= 0 ? d.r * 2 : d.x;     
+        d.x = (d.x + d.r) > thiz.width + xpadding ? d.x - d.r : d.x;        
+        d.y = d.y + (targetY - d.y) * thiz.damper * alpha;      
+      }else{
         d.x = d.x + (target.x - d.x) * thiz.damper * alpha;
         d.x = d.x <= 0 ? d.r * 2 : d.x;
         d.x = (d.x + d.r) > thiz.width + xpadding ? d.x - d.r : d.x;
         d.y = d.y + (target.y - d.y) * thiz.damper * alpha;
+    }
     };
-}
+};
 
 /**
  * Se encarga de otener la mayor X e Y de los nodos luego del filtrado
